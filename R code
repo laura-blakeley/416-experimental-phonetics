@@ -1,3 +1,5 @@
+library(tidyverse) #etc.
+
 vowels <- read.csv("Vowels.csv")
 
 #Calculating the midpoint timepoint if not already extracted
@@ -208,4 +210,4 @@ paired.norm3.means %>%
   ) +
   theme_minimal()
 
-  
+  #See Readme doc for info about code for supplementary plots
