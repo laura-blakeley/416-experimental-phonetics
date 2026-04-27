@@ -1,0 +1,211 @@
+vowels <- read.csv("Vowels.csv")
+
+#Calculating the midpoint timepoint if not already extracted
+vowels$Mid <- (vowels$Start + vowels$End)/2
+
+#Shapiro test for normal distribution of data
+shapiro.test(vowels$F2norm) # Change dataframe and object to whatever's needed
+
+#Distribution histograms - to test if normal distribution for further tests. Change dataframe and object as needed
+ggplot(vowels, aes(x = F2norm, fill = Sex)) + geom_density(alpha = .5)
+ggplot(vowels, aes(x = F2norm, fill = Human.or.clone)) + geom_density(alpha = .5)
+ggplot(vowels, aes(x = F2norm, fill = Text.type)) + geom_density(alpha = .5)
+
+#Non-normalised means of vowels
+vowels.nonnorm.means = vowels %>%
+  group_by(SpeakerID, Human.or.clone, Sex) %>%
+  summarise(
+    F1 = mean(F1_50),
+    F2 = mean(F2_50),
+    F3 = mean(F3_50)
+  )
+
+#Normalisation and calculating normalised means - intrinsic method - log base 10
+
+#Log normalisation - all data
+#Mutate() to create new columns with the log10 values
+vowel.data.log <- vowels %>%
+  mutate(
+    F1_log = log10(F1_50),
+    F2_log = log10(F2_50),
+    F3_log = log10(F3_50)
+  )
+
+#Average out the output values to calculate normalised means
+#Group by speaker and vowel to get the mean log formants
+vowel.log.means <- vowel.data.log %>%
+  group_by(SpeakerID, Human.or.clone, Sex, Word, Lexical.set) %>%
+  summarise(
+    mean_F1_log = mean(F1_log),
+    mean_F2_log = mean(F2_log),
+    mean_F3_log = mean(F3_log),
+    .groups = 'drop' # Drops the grouping structure afterwards
+  )
+
+#Create vowel space graph
+#Plotting F2 on the x-axis and F1 on the y-axis
+vowel.log.means %>%
+  ggplot()+
+  aes(x = mean_F2_log, y = mean_F1_log, colour = Human.or.clone, fill = Human.or.clone, label = SpeakerID) +
+  geom_point(size = 1) +
+  geom_text(size = 3, vjust = -1) +
+  scale_x_reverse() +
+  scale_y_reverse() +
+  labs(
+    x = "Mean F2 (log base 10)",
+    y = "Mean F1 (log base 10)",
+    title = "Log-normalised means of Belfast FOOT /u/, all speakers, all conditions"
+    ) +
+  theme_minimal()
+
+#Template for more log-normalised graphs using vowel.data.log instead, i.e., not for means
+vowel.data.log %>%
+  ggplot()+
+  aes(x = F2_log, y = F1_log, colour = Human.or.clone, fill = Human.or.clone, label = Word) +
+  geom_point(size = 1) +
+  geom_text(size = 3, vjust = -1) +
+  scale_x_reverse() +
+  scale_y_reverse() +
+  labs(
+    x = "F2 (log base 10)",
+    y = "F1 (log base 10)",
+    title = "Log-normalised F1 and F2 values with words for Belfast FOOT /u/ by humans vs. clones"
+    ) +
+  theme_minimal()
+
+vowel.data.log %>%
+    ggplot()+
+    aes(x = F2_log, y = F1_log, colour = Text.type, fill = Text.type, label = Word) +
+    geom_point(size = 1) +
+    geom_text(size = 3, vjust = -1) +
+    scale_x_reverse() +
+    scale_y_reverse() +
+    labs(
+      x = "F2 (log base 10)",
+      y = "F1 (log base 10)",
+      title = "Log-normalised F1 and F2 values with words for Belfast FOOT /u/ by audio condition"
+    ) +
+    theme_minimal()
+
+vowel.data.log %>%
+  filter(Word == "good") %>%
+  ggplot()+
+  aes(x = F2_log, y = F1_log, colour = Human.or.clone, fill = Human.or.clone, label = Word) +
+  geom_point(size = 1) +
+  geom_text(size = 3, vjust = -1) +
+  scale_x_reverse() +
+  scale_y_reverse() +
+  labs(
+    x = "F2 (log base 10)",
+    y = "F1 (log base 10)",
+    title = "Log-normalised F1 and F2 values of 'good' for Belfast FOOT /u/ by humans vs. clones"
+  ) +
+  theme_minimal()
+
+vowel.data.log %>%
+  filter(Word == "good", Text.type %in% c("Original combined", "Voice clone original story long")) %>%
+  ggplot()+
+  aes(x = F2_log, y = F1_log, colour = Human.or.clone, fill = Human.or.clone, label = Word) +
+  geom_point(size = 1) +
+  geom_text(size = 3, vjust = -1) +
+  scale_x_reverse() +
+  scale_y_reverse() +
+  labs(
+    x = "F2 (log base 10)",
+    y = "F1 (log base 10)",
+    title = "Normalised F1 and F2 values of 'good' for Belfast FOOT /u/ by unfiltered audio condition (HO vs. CO)"
+    ) +
+    theme_minimal()
+
+#Modelling interactions - see note about multicollinearity clash! Adapt code to remove items if column data overlap
+#Plain Eng: lm(outcome variable ∼ predictor variable*another predictor variable/effect + another combo, data = dataset)
+vowel.logf1.lm = lm(F1_log ~ Sex*Text.type + Sex*Word, data = vowel.data.log)
+summary(vowel.logf1.lm)
+
+#etc. for different conditions and F2 and F3
+vowel.logf2.lm = lm(F2n_log ~ Sex*F1_log + Sex*F3_log + Human.or.clone*F1_log + Human.or.clone*F3_log, data = vowel.data.log)
+summary(vowel.logf2.lm)
+
+#Boxplots of modelled interactions (log base 10 normalised)
+vowel.data.log %>%
+  ggplot() +
+  aes(x = Sex, y = F2_log, fill = Text.type) + 
+  facet_wrap(~ Human.or.clone) +
+  geom_boxplot() +
+  labs(
+    x = "Sexes",
+    y = "F2 (log base 10 normalised)",
+    title = "Normalised F2 values for the sexes across clone and human speakers"
+  )+
+  theme_minimal()
+
+#Another example boxplot
+vowel.data.log %>%
+  ggplot() +
+  aes(x = Sex, y = F2_log, fill = Text.type) + 
+  facet_wrap(~ Human.or.clone) +
+  geom_boxplot() +
+  labs(
+    x = "Sexes",
+    y = "F2 (log base 10 normalised)",
+    title = "Normalised F2 values for the sexes across clone and human speakers"
+  )+
+  theme_minimal()
+
+#Creating pairs and plots LOG BASE 10 NORMALISED to show overlaid ellipses of each speaker pair
+paired.norm4 <- vowel.data.log %>%
+  mutate(
+    base_id   = str_extract(SpeakerID, "^\\d+"),
+    condition = str_extract(SpeakerID, "[HC](?=[OB]$)"),  # H or C (second last)
+    set       = str_extract(SpeakerID, "[OB]$"),          # O or B (last)
+    pair_id   = paste(base_id, set, sep = "_")
+  )
+paired.norm4 %>%
+  ggplot() +
+  aes(x = F2_log, y = F1_log, colour = SpeakerID) +
+  geom_point(alpha = 0.4) +
+  stat_ellipse(level = 0.95, linewidth = 1) + 
+  scale_y_reverse() +
+  scale_x_reverse() +
+  facet_wrap(~ pair_id) +
+  theme_minimal() +
+  labs(
+    title = "F1 and F2 values, log-normalised, by speaker pair and condition",
+    x = "F2 (log base 10 normalised)",
+    y = "F1 (log base 10 normalised)",
+    colour = "Speaker ID"
+  )
+#Plus with words labelled
+paired.norm4 %>%
+  ggplot() +
+  aes(x = F2_log, y = F1_log, colour = SpeakerID, label = Word) +
+  geom_text(size = 0.5) +
+  stat_ellipse(level = 0.95, linewidth = 1) + 
+  scale_y_reverse() +
+  scale_x_reverse() +
+  facet_wrap(~ pair_id) +
+  theme_minimal() +
+  labs(
+    title = "F1 and F2 values with words, log-normalised, by speaker pair and condition",
+    x = "F2 (log base 10 normalised)",
+    y = "F1 (log base 10 normalised)",
+    colour = "Speaker ID"
+  )
+
+#Plotting formant trajectories from human to clone using LOG BASE 10 NORMALISATION
+paired.norm3.means %>%
+  ggplot() +
+  aes(x = F2_H, y = F1_C, colour = pair_id) +
+  geom_segment(aes(x = (F2_H), y = (F1_H), xend = (F2_C), yend = (F1_C), colour = pair_id), arrow = arrow(length = unit(0.1, "cm"))) +
+  facet_wrap(~pair_id) +
+  scale_x_reverse() +
+  scale_y_reverse() +
+  labs(
+    x = "F2 (log base 10 normalised)",
+    y = "F1 (log base 10 normalised)",
+    colour = "Pair ID",
+    title = "Movement between human and clone-pairs' realisation of /u/, normalised"
+  ) +
+  theme_minimal()
+
+  
