@@ -1,0 +1,238 @@
+# Sam Kirkham 2014 (LING327)
+# Adds a single new tier to a series of existing TextGrids and their associated WAV files
+# Do *not* include any quotation marks around either the tier name or the tier number
+# Run from the directory in which the TextGrids and WAV files are located
+
+form Adds one new tier to your TextGrid
+	word sound_extension .wav
+	word textGrid_extension .textGrid
+	sentence tierName enter new tier name here
+	integer tierNumber enter number of new tier here
+endform
+
+clearinfo
+
+mySounds = Create Strings as file list... sounds *'sound_extension$'
+nSounds = Get number of strings
+
+for iSound to nSounds
+	select mySounds
+	sound$ = Get string... iSound
+	name$ = sound$ - sound_extension$
+	textGrid$ = name$ + textGrid_extension$
+		
+	mySound = Read from file... 'sound$'
+	myTextGrid = Read from file... 'textGrid$'
+	
+	select mySound
+	select myTextGrid
+
+	Insert interval tier... tierNumber 'tierName$'
+
+	select myTextGrid
+	Write to text file... 'name$'.TextGrid
+
+endfor
+
+# Browse save
+# Sam Kirkham 2014 (LING327)
+# Presents a series of sound files and accompanying TextGrids, allows you to edit the TextGrid
+# and then when you press 'continue' it saves your changes and opens the next file
+# Pressing stop will end the script, but anything you did before the last time you
+# pressed 'continue' will be saved
+# Run from the folder where the WAV and TextGrid files are located
+
+form Press 'ok' to continue
+	word sound_extension .wav
+	word textGrid_extension .textGrid
+endform
+
+clearinfo
+
+mySounds = Create Strings as file list... sounds *'sound_extension$'
+nSounds = Get number of strings
+
+for iSound to nSounds
+	select mySounds
+	sound$ = Get string... iSound
+	name$ = sound$ - sound_extension$
+	textGrid$ = name$ + textGrid_extension$
+		
+	mySound = Read from file... 'sound$'
+	myTextGrid = Read from file... 'textGrid$'
+
+	select mySound
+	plus myTextGrid
+
+	Edit
+	
+	pause
+
+	endeditor
+	
+	select myTextGrid
+	Write to text file... 'name$'.TextGrid
+
+endfor
+
+# Create TextGrids
+# Sam Kirkham 2014 (LING327)
+# Takes a number of individual WAV files in a folder and adds a TextGrid
+# TextGrid will have the same name as the WAV file
+# You can specify the names of the tiers in the form box
+# Tier names must be enclosed in quotation marks and separated by spaces; e.g. "vowel word speaker"
+# Script must be run from the folder in which the sound files are located
+
+form Enter your tier names in the box below (within the quote marks!)
+	word sound_extension .wav
+	word textGrid_extension .textGrid
+	sentence tierNames "enter tier names here"
+endform
+
+clearinfo
+
+mySounds = Create Strings as file list... sounds *'sound_extension$'
+nSounds = Get number of strings
+
+for iSound to nSounds
+	select mySounds
+	sound$ = Get string... iSound
+	name$ = sound$ - sound_extension$
+	
+	mySound = Read from file... 'sound$'
+
+	select mySound
+	
+	textGrid = To TextGrid... 'tierNames$'
+	Write to text file... 'name$'.TextGrid
+
+endfor
+
+# Extract formants - Laura's version of Scarlett's script
+# - Finds TextGrids by listing generic FILES (so .textgrid works)
+# - phone tier = 1 (UH1)
+# - word tier  = 2
+# - Writes Start and End times + formants at 25/50/75%
+
+form Estimate vowel formants
+    word sound_extension .wav
+    word textGrid_extension .textgrid
+    comment Output file created in the same folder
+    text filename vowelFormants.csv
+
+    comment Tier numbers:
+    integer phoneTier 1
+    integer wordTier  2
+
+    comment Label to measure (leave blank to measure ALL labelled intervals):
+    text targetLabel UH1
+
+    comment Formant settings:
+    positive maximumFormant 5500
+    integer numberOfFormants 5
+    positive windowLength 0.025
+    positive preEmphasisFrom 50
+endform
+clearinfo
+
+fileappend "'filename$'" File,Word,Phoneme,Start,End,Duration,F1_25,F2_25,F3_25,F1_50,F2_50,F3_50,F1_75,F2_75,F3_75,'newline$'
+
+# IMPORTANT: use "files" not "textgrids" so .textgrid files are found
+myTextGrids = Create Strings as file list... files *'textGrid_extension$'
+nTextGrids = Get number of strings
+appendInfoLine: "Found ", nTextGrids, " TextGrid files with extension ", textGrid_extension$
+
+for iTG to nTextGrids
+    select myTextGrids
+    textGrid$ = Get string... iTG
+    name$ = textGrid$ - textGrid_extension$
+
+    printline 'name$'
+
+    sound$ = name$ + sound_extension$
+
+    # Read sound and TextGrid
+    mySound = Read from file... 'sound$'
+    myTextGrid = Read from file... 'textGrid$'
+
+    # Create formant object once per sound
+    select mySound
+    myFormant = To Formant (burg)... 0 numberOfFormants maximumFormant windowLength preEmphasisFrom
+
+    # Interval count on phone tier
+    select myTextGrid
+    numberOfPhones = Get number of intervals: phoneTier
+    appendInfoLine: "Intervals on phone tier: ", numberOfPhones
+
+    # Loop intervals on phone tier
+    for thisInterval from 1 to numberOfPhones
+        select myTextGrid
+        thisPhone$ = Get label of interval: phoneTier, thisInterval
+
+        # Relevance rule
+        if targetLabel$ <> ""
+            relevant = (thisPhone$ == targetLabel$)
+        else
+            relevant = (thisPhone$ <> "")
+        endif
+
+        if relevant
+            startTime = Get start point: phoneTier, thisInterval
+            endTime   = Get end point:   phoneTier, thisInterval
+            duration  = endTime - startTime
+
+            if duration > 0
+                t50 = startTime + duration/2
+                t25 = startTime + (duration * 0.25)
+                t75 = startTime + (duration * 0.75)
+
+                # Word label at midpoint
+                wordInterval = Get interval at time: wordTier, t50
+                thisWord$ = Get label of interval: wordTier, wordInterval
+
+                # Formants from formant object
+                select myFormant
+                f1_25 = Get value at time... 1 t25 Hertz Linear
+                f2_25 = Get value at time... 2 t25 Hertz Linear
+                f3_25 = Get value at time... 3 t25 Hertz Linear
+
+                f1_50 = Get value at time... 1 t50 Hertz Linear
+                f2_50 = Get value at time... 2 t50 Hertz Linear
+                f3_50 = Get value at time... 3 t50 Hertz Linear
+
+                f1_75 = Get value at time... 1 t75 Hertz Linear
+                f2_75 = Get value at time... 2 t75 Hertz Linear
+                f3_75 = Get value at time... 3 t75 Hertz Linear
+
+                appendFileLine: "'filename$'",
+                    ...name$, ",",
+                    ...thisWord$, ",",
+                    ...thisPhone$, ",",
+                    ...startTime, ",",
+                    ...endTime, ",",
+                    ...duration, ",",
+                    ...f1_25, ",",
+                    ...f2_25, ",",
+                    ...f3_25, ",",
+                    ...f1_50, ",",
+                    ...f2_50, ",",
+                    ...f3_50, ",",
+                    ...f1_75, ",",
+                    ...f2_75, ",",
+                    ...f3_75
+            endif
+        endif
+    endfor
+
+    # Cleanup
+    select myFormant
+    Remove
+    select mySound
+    Remove
+    select myTextGrid
+    Remove
+endfor
+
+select myTextGrids
+Remove
+clearinfo
